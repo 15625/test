@@ -1,0 +1,11 @@
+[Usage] 
+Usage: java Test <source_file>
+[not_exist.root] 
+java.io.FileNotFoundException: input\not_exist.root (The system cannot find the file specified)
+[empty.root] 
+EvalException: unbound var: root
+[empty_line.root] 
+ParseException: line 1: variable name is empty
+[wrong_indent_0.root] 
+ParseException: line 1: indent 2 (expected 0)
+[first_program.root] 
