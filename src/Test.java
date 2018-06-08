@@ -8,11 +8,11 @@ public class Test
         try
         {
             var srcFile = args[0];
-            var reader = new java.io.FileReader(srcFile);
-            var srcReader = new java.io.LineNumberReader(reader);
 
-            int indent = 0;
-            var bindings = parseBindings(srcReader, indent);
+            var parser = new Parser(srcFile);
+
+            var indent = 0;
+            var bindings = parser.parseBindings(indent);
 
             var env = new RecEnv(bindings, initEnv());
 
@@ -39,8 +39,22 @@ public class Test
         System.exit(-1);
     }
 
-    private static java.util.Map<String, Expr> parseBindings(
-            java.io.LineNumberReader reader,
+    private static Env initEnv()
+    {
+        return new SystemEnv();
+    }
+}
+
+class Parser
+{
+    public Parser(String srcFile)
+        throws java.io.FileNotFoundException
+    {
+        var freader = new java.io.FileReader(srcFile);
+        reader = new java.io.LineNumberReader(freader);
+    }
+
+    public java.util.Map<String, Expr> parseBindings(
             int indent)
         throws ParseException
     {
@@ -48,7 +62,7 @@ public class Test
 
         for (;;)
         {
-            var b = parseBinding(reader, indent);
+            var b = parseBinding(indent);
             if (b == null)
                 break;
 
@@ -63,8 +77,7 @@ public class Test
         return bindings;
     }
 
-    private static java.util.Map.Entry<VarExpr, Expr> parseBinding(
-            java.io.LineNumberReader reader,
+    private java.util.Map.Entry<VarExpr, Expr> parseBinding(
             int indent)
         throws ParseException
     {
@@ -119,15 +132,14 @@ public class Test
                     String.format("bad equal sign: '%s' (expected ' = ')", eq));
 
         // expr
-        var expr = parseExpr(line, i, reader, indent);
+        var expr = parseExpr(line, i, indent);
 
         return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(var, expr);
     }
 
-    private static Expr parseExpr(
+    private Expr parseExpr(
             String line,
             int i0,
-            java.io.LineNumberReader reader,
             int indent)
         throws ParseException
     {
@@ -172,10 +184,7 @@ public class Test
         return i;
     }
 
-    private static Env initEnv()
-    {
-        return new SystemEnv();
-    }
+    private java.io.LineNumberReader reader;
 }
 
 class RootException extends Exception
