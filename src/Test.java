@@ -52,6 +52,9 @@ class Parser
     {
         var freader = new java.io.FileReader(srcFile);
         reader = new java.io.LineNumberReader(freader);
+
+        line = null;
+        i0 = 0;
     }
 
     public java.util.Map<String, Expr> parseBindings(
@@ -81,22 +84,30 @@ class Parser
             int indent)
         throws ParseException
     {
-        String line;
-        try
+        if (line == null)
         {
-            line = reader.readLine();
-        }
-        catch (java.io.IOException ex)
-        {
-            throw new ParseException(
-                    new SrcInfo(reader.getLineNumber(), 0, 0),
-                    "I/O error", ex);
+            try
+            {
+                line = reader.readLine();
+            }
+            catch (java.io.IOException ex)
+            {
+                throw new ParseException(
+                        new SrcInfo(reader.getLineNumber(), 0, 0),
+                        "I/O error", ex);
+            }
+
+            i0 = 0;
         }
 
         if (line == null)
             return null;
 
         var l = reader.getLineNumber();
+
+        if (i0 != 0)
+            throw new RuntimeException(
+                    String.format("line %d: i0 is not 0: %d (should not happend)", l, i0));
 
         // indent
         int i = 0;
@@ -111,8 +122,8 @@ class Parser
                     String.format("indent %d (expected %d)", i, indent));
 
         // variable
-        var i0 = i;
-        i = endOfNextToken(line, i0);
+        i0 = i;
+        i = endOfNextToken();
         var varName = line.substring(i0, i);
 
         if (varName.isEmpty())
@@ -132,20 +143,22 @@ class Parser
                     String.format("bad equal sign: '%s' (expected ' = ')", eq));
 
         // expr
-        var expr = parseExpr(line, i, indent);
+        i0 = i;
+        var expr = parseExpr(indent);
+
+        line = null;
+        i0 = 0;
 
         return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(var, expr);
     }
 
     private Expr parseExpr(
-            String line,
-            int i0,
             int indent)
         throws ParseException
     {
         var l = reader.getLineNumber();
 
-        var i = endOfNextToken(line, i0);
+        var i = endOfNextToken();
         var t1 = line.substring(i0, i);
         var e1 = new VarExpr(t1, new SrcInfo(l, i0 + 1, i));
 
@@ -153,7 +166,7 @@ class Parser
             return e1;
 
         i0 = i + 1;
-        i = endOfNextToken(line, i0);
+        i = endOfNextToken();
         var t2 = line.substring(i0, i);
         var e2 = new VarExpr(t2, new SrcInfo(l, i0 + 1, i));
 
@@ -161,7 +174,7 @@ class Parser
             throw new RuntimeException("NYI...");
 
         i0 = i + 1;
-        i = endOfNextToken(line, i0);
+        i = endOfNextToken();
         var t3 = line.substring(i0, i);
         var e3 = new VarExpr(t3, new SrcInfo(l, i0 + 1, i));
 
@@ -174,9 +187,7 @@ class Parser
         return new AppExpr(new AppExpr(e1, e2), e3);
     }
 
-    private static int endOfNextToken(
-            String line,
-            int i0)
+    private int endOfNextToken()
     {
         var i = i0;
         while (i < line.length() && line.charAt(i) != ' ')
@@ -185,6 +196,8 @@ class Parser
     }
 
     private java.io.LineNumberReader reader;
+    String line;
+    int i0;
 }
 
 class RootException extends Exception
