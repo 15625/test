@@ -8,11 +8,11 @@ public class Test
         try
         {
             var srcFile = args[0];
-            var reader = new java.io.FileReader(srcFile);
-            var srcReader = new java.io.LineNumberReader(reader);
 
-            int indent = 0;
-            var bindings = parseBindings(srcReader, indent);
+            var parser = new Parser(srcFile);
+
+            var indent = 0;
+            var bindings = parser.parseBindings(indent);
 
             var env = new RecEnv(bindings, initEnv());
 
@@ -23,8 +23,7 @@ public class Test
             }
             catch (RawException ex)
             {
-                var l = srcReader.getLineNumber();
-                throw new EvalException(new SrcInfo(l, 0, 0), ex.getMessage());
+                throw new EvalException(parser.srcLoc(), ex.getMessage());
             }
 
             var result = root.evaluate();
@@ -48,8 +47,30 @@ public class Test
         System.exit(-1);
     }
 
-    private static java.util.Map<String, Expr> parseBindings(
-            java.io.LineNumberReader reader,
+    private static Env initEnv()
+    {
+        return new SystemEnv();
+    }
+}
+
+class Parser
+{
+    public Parser(String srcFile)
+        throws java.io.FileNotFoundException
+    {
+        var freader = new java.io.FileReader(srcFile);
+        reader = new java.io.LineNumberReader(freader);
+
+        line = null;
+        i0 = 0;
+    }
+
+    public SrcInfo srcLoc()
+    {
+        return new SrcInfo(reader.getLineNumber(), i0, i0);
+    }
+
+    public java.util.Map<String, Expr> parseBindings(
             int indent)
         throws ParseException
     {
@@ -57,7 +78,7 @@ public class Test
 
         for (;;)
         {
-            var b = parseBinding(reader, indent);
+            var b = parseBinding(indent);
             if (b == null)
                 break;
 
@@ -72,27 +93,34 @@ public class Test
         return bindings;
     }
 
-    private static java.util.Map.Entry<VarExpr, Expr> parseBinding(
-            java.io.LineNumberReader reader,
+    private java.util.Map.Entry<VarExpr, Expr> parseBinding(
             int indent)
         throws ParseException
     {
-        String line;
-        try
+        if (line == null)
         {
-            line = reader.readLine();
-        }
-        catch (java.io.IOException ex)
-        {
-            throw new ParseException(
-                    new SrcInfo(reader.getLineNumber(), 0, 0),
-                    "I/O error", ex);
+            try
+            {
+                line = reader.readLine();
+            }
+            catch (java.io.IOException ex)
+            {
+                throw new ParseException(
+                        new SrcInfo(reader.getLineNumber(), 0, 0),
+                        "I/O error", ex);
+            }
+
+            i0 = 0;
         }
 
         if (line == null)
             return null;
 
         var l = reader.getLineNumber();
+
+        if (i0 != 0)
+            throw new RuntimeException(
+                    String.format("line %d: i0 is not 0: %d (should not happend)", l, i0));
 
         // indent
         int i = 0;
@@ -107,8 +135,8 @@ public class Test
                     String.format("indent %d (expected %d)", i, indent));
 
         // variable
-        var i0 = i;
-        i = endOfNextToken(line, i0);
+        i0 = i;
+        i = endOfNextToken();
         var varName = line.substring(i0, i);
 
         if (varName.isEmpty())
@@ -128,15 +156,16 @@ public class Test
                     String.format("bad equal sign: '%s' (expected ' = ')", eq));
 
         // expr
-        var expr = parseExpr(line, i, reader, indent);
+        i0 = i;
+        var expr = parseExpr(indent);
+
+        line = null;
+        i0 = 0;
 
         return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(var, expr);
     }
 
-    private static Expr parseExpr(
-            String line,
-            int i0,
-            java.io.LineNumberReader reader,
+    private Expr parseExpr(
             int indent)
         throws ParseException
     {
@@ -146,7 +175,7 @@ public class Test
 
         while (i0 <= line.length())
         {
-            var i = endOfNextToken(line, i0);
+            var i = endOfNextToken();
             var t2 = line.substring(i0, i);
 
             if (t2.isEmpty())
@@ -164,9 +193,7 @@ public class Test
         return e;
     }
 
-    private static int endOfNextToken(
-            String line,
-            int i0)
+    private int endOfNextToken()
     {
         var i = i0;
         while (i < line.length() && line.charAt(i) != ' ')
@@ -174,10 +201,9 @@ public class Test
         return i;
     }
 
-    private static Env initEnv()
-    {
-        return new SystemEnv();
-    }
+    private java.io.LineNumberReader reader;
+    String line;
+    int i0;
 }
 
 class RootException extends Exception
