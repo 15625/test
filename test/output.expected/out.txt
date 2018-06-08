@@ -10,3 +10,13 @@
 [bin_op_e1.root] 
 [bin_op_e2.root] 
 [bin_op_e3.root] 
+[part_bin_op.root] 
+2.0 +
+[long_exp.root] 
+16.0
+[long_exp_e1.root] 
+[long_exp_e2.root] 
+[long_exp_e3.root] 
+[long_exp_e4.root] 
+[long_exp_e5.root] 
+[long_exp_e6.root] 

@@ -144,7 +144,7 @@ public class Test
 
         Expr e = null;
 
-        while (i0 < line.length())
+        while (i0 <= line.length())
         {
             var i = endOfNextToken(line, i0);
             var t2 = line.substring(i0, i);
