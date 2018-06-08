@@ -54,16 +54,16 @@ public class Test
 
             if (bindings.containsKey(b.getKey()))
                 throw new ParseException(
-                        reader.getLineNumber(), 
+                        b.getKey().srcInfo(),
                         String.format("already bound: %s%n", b.getKey()));
 
-            bindings.put(b.getKey(), b.getValue());
+            bindings.put(b.getKey().name(), b.getValue());
         }
 
         return bindings;
     }
 
-    private static java.util.Map.Entry<String, Expr> parseBinding(
+    private static java.util.Map.Entry<VarExpr, Expr> parseBinding(
             java.io.LineNumberReader reader,
             int indent)
         throws ParseException
@@ -75,11 +75,15 @@ public class Test
         }
         catch (java.io.IOException ex)
         {
-            throw new ParseException(reader.getLineNumber(), "I/O error", ex);
+            throw new ParseException(
+                    new SrcInfo(reader.getLineNumber(), 0, 0),
+                    "I/O error", ex);
         }
 
         if (line == null)
             return null;
+
+        var l = reader.getLineNumber();
 
         // indent
         int i = 0;
@@ -90,18 +94,20 @@ public class Test
             return null;
         else if (i > indent)
             throw new ParseException(
-                    reader.getLineNumber(), 
+                    new SrcInfo(l, 1, i),
                     String.format("indent %d (expected %d)", i, indent));
 
         // variable
         var i0 = i;
         i = endOfNextToken(line, i0);
-        var var = line.substring(i0, i);
+        var varName = line.substring(i0, i);
 
-        if (var.isEmpty())
+        if (varName.isEmpty())
             throw new ParseException(
-                    reader.getLineNumber(), 
+                    new SrcInfo(l, i0 + 1, i + 1),
                     "variable name is empty");
+
+        var var = new VarExpr(varName, new SrcInfo(l, i0 + 1, i));
 
         // =
         i0 = i;
@@ -109,13 +115,13 @@ public class Test
         var eq = line.substring(i0, i);
         if (!eq.equals(" = "))
             throw new ParseException(
-                    reader.getLineNumber(),
+                    new SrcInfo(l, i0 + 1, i),
                     String.format("bad equal sign: '%s' (expected ' = ')", eq));
 
         // expr
         var expr = parseExpr(line, i, reader, indent);
 
-        return new java.util.AbstractMap.SimpleEntry<String, Expr>(var, expr);
+        return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(var, expr);
     }
 
     private static Expr parseExpr(
@@ -125,15 +131,19 @@ public class Test
             int indent)
         throws ParseException
     {
+        var l = reader.getLineNumber();
+
         var i = endOfNextToken(line, i0);
         var t1 = line.substring(i0, i);
+        var e1 = new VarExpr(t1, new SrcInfo(l, i0 + 1, i));
 
         if (i == line.length())
-            return new VarExpr(t1);
+            return e1;
 
         i0 = i + 1;
         i = endOfNextToken(line, i0);
         var t2 = line.substring(i0, i);
+        var e2 = new VarExpr(t2, new SrcInfo(l, i0 + 1, i));
 
         if (i == line.length())
             throw new RuntimeException("NYI...");
@@ -141,16 +151,15 @@ public class Test
         i0 = i + 1;
         i = endOfNextToken(line, i0);
         var t3 = line.substring(i0, i);
+        var e3 = new VarExpr(t3, new SrcInfo(l, i0 + 1, i));
 
         if (i != line.length())
         {
-            System.err.format("line %d: i0 %d i %d len %d%n", reader.getLineNumber(), i0, i, line.length());
+            System.err.format("line %d: i0 %d i %d len %d%n", l, i0, i, line.length());
             throw new RuntimeException("NYI...");
         }
 
-        return new AppExpr(
-                new AppExpr(new VarExpr(t1), new VarExpr(t2)),
-                new VarExpr(t3));
+        return new AppExpr(new AppExpr(e1, e2), e3);
     }
 
     private static int endOfNextToken(
@@ -171,54 +180,70 @@ public class Test
 
 class RootException extends Exception
 {
-    public RootException(String msg)
+    public RootException(SrcInfo srcInfo, String msg)
     {
-        super(msg);
+        super(compMsg(srcInfo, msg));
     }
 
-    public RootException(String msg, Throwable cause)
+    public RootException(SrcInfo srcInfo, String msg, Throwable cause)
     {
-        super(msg, cause);
+        super(compMsg(srcInfo, msg), cause);
+    }
+
+    private static String compMsg(SrcInfo srcInfo, String msg)
+    {
+        return String.format("%d(%d-%d): %s", srcInfo.Line, srcInfo.CharBegin, srcInfo.CharEnd, msg);
     }
 }
 
 class ParseException extends RootException
 {
-    public ParseException(int line, String msg)
+    public ParseException(SrcInfo srcInfo, String msg)
     {
-        super(String.format("line %d: %s", line, msg));
+        super(srcInfo, msg);
     }
 
-    public ParseException(int line, String msg, Throwable cause)
+    public ParseException(SrcInfo srcInfo, String msg, Throwable cause)
     {
-        super(String.format("line %d: %s", line, msg), cause);
+        super(srcInfo, msg, cause);
     }
 }
 
 class EvalException extends RootException
 {
     // TODO: more context
-    public EvalException(String msg)
+    public EvalException(SrcInfo srcInfo, String msg)
     {
-        super(msg);
+        super(srcInfo, msg);
     }
 
-    public EvalException(String msg, Throwable cause)
+    public EvalException(SrcInfo srcInfo, String msg, Throwable cause)
     {
-        super(msg, cause);
+        super(srcInfo, msg, cause);
+    }
+}
+
+class ApplyException extends Exception
+{
+    public ApplyException(String msg)
+    {
+        super(msg);
     }
 }
 
 interface Value
 {
     Value apply(Value v)
-        throws EvalException;
+        throws ApplyException;
 }
 
 interface Expr
 {
     public Value evaluate(Env env)
         throws EvalException;
+
+    // TODO: split out srcInfo
+    public SrcInfo srcInfo();
 }
 
 interface Closure
@@ -233,6 +258,19 @@ interface Env
         throws EvalException;
 }
 
+class SrcInfo
+{
+    SrcInfo(int line, int charBegin, int charEnd)
+    {
+        Line = line;
+        CharBegin = charBegin;
+        CharEnd = charEnd;
+    }
+
+    public final int Line;
+    public final int CharBegin;
+    public final int CharEnd;
+}
 
 class DoubleValue implements Value
 {
@@ -247,14 +285,14 @@ class DoubleValue implements Value
     }
 
     public Value apply(Value v)
-        throws EvalException
+        throws ApplyException
     {
         if (v instanceof BinOpValue)
         {
             return new DoubleOpValue(this, (BinOpValue)v);
         }
         else
-            throw new EvalException(
+            throw new ApplyException(
                 String.format("wrong arg type: %s %s", toString(), v.toString()));
     }
 
@@ -290,9 +328,9 @@ class BinOpValue implements Value
     }
 
     public Value apply(Value v)
-        throws EvalException
+        throws ApplyException
     {
-        throw new EvalException(
+        throw new ApplyException(
                 String.format("cannot apply: %s %s", toString(), v.toString()));
     }
 
@@ -325,7 +363,7 @@ class DoubleOpValue implements Value
     }
 
     public Value apply(Value v)
-        throws EvalException
+        throws ApplyException
     {
         if (v instanceof DoubleValue)
         {
@@ -333,7 +371,7 @@ class DoubleOpValue implements Value
                     m_op.doubleOp().applyAsDouble(m_lhs.val(), ((DoubleValue)v).val()));
         }
         else
-            throw new EvalException(
+            throw new ApplyException(
                 String.format("wrong arg type: %s %s", toString(), v.toString()));
     }
 
@@ -341,10 +379,26 @@ class DoubleOpValue implements Value
     private final BinOpValue m_op;
 }
 
-class VarExpr implements Expr
+abstract class AbstractExpr implements Expr
 {
-    public VarExpr(String var)
+    public AbstractExpr(SrcInfo srcInfo)
     {
+        m_srcInfo = srcInfo;
+    }
+
+    public SrcInfo srcInfo()
+    {
+        return m_srcInfo;
+    }
+
+    private final SrcInfo m_srcInfo;
+}
+
+class VarExpr extends AbstractExpr
+{
+    public VarExpr(String var, SrcInfo srcInfo)
+    {
+        super(srcInfo);
         m_var = var;
     }
 
@@ -355,13 +409,19 @@ class VarExpr implements Expr
         return clo.evaluate();
     }
 
+    public String name()
+    {
+        return m_var;
+    }
+
     private final String m_var;
 }
 
-class AppExpr implements Expr
+class AppExpr extends AbstractExpr
 {
     public AppExpr(Expr e1, Expr e2)
     {
+        super(composeSrcInfo(e1.srcInfo(), e2.srcInfo()));
         m_e1 = e1;
         m_e2 = e2;
     }
@@ -371,7 +431,25 @@ class AppExpr implements Expr
     {
         var v1 = m_e1.evaluate(env);
         var v2 = m_e2.evaluate(env);
-        return v1.apply(v2);
+        try
+        {
+            return v1.apply(v2);
+        }
+        catch (ApplyException ex)
+        {
+            throw new EvalException(srcInfo() , ex.getMessage());
+        }
+    }
+
+    private static SrcInfo composeSrcInfo(SrcInfo d1, SrcInfo d2)
+    {
+        if (d1.Line != d2.Line)
+            throw new RuntimeException(
+                    String.format("line numbers mismatch: %d vs. %d",
+                        d1.Line,
+                        d2.Line));
+
+        return new SrcInfo(d1.Line, d1.CharBegin, d2.CharEnd);
     }
 
     private final Expr m_e1;
@@ -461,6 +539,8 @@ class SystemEnv implements Env
         {
         }
 
-        throw new EvalException(String.format("unbound var: %s", var));
+        throw new EvalException(
+                new SrcInfo(0, 0, 0),
+                String.format("unbound var: %s", var));
     }
 }

@@ -17,6 +17,7 @@ Scratch
   learn quickly, but takes time to perfect
      essentially only letrec
   No fancy UI
+  No cross-line expression
   Rely on external editor
   Syntax: format (indentation & space) matters
   encourage carefulness (do not tolerate carelessness)
