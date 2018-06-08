@@ -1,2 +1,38 @@
 BUILD
   javac @build
+
+TEST
+  test\test.bat
+
+TODO
+  show eval steps
+    debugging
+    more meaningful error messages
+  parallel eval
+
+Scratch
+  Encourage top-down thinking (structural induction)
+  Mathematical/Algebra thinking
+     say no to confusing notation designed by programmers
+  learn quickly, but takes time to perfect
+     essentially only letrec
+  No fancy UI
+  Rely on external editor
+  Syntax: format (indentation & space) matters
+  encourage carefulness (do not tolerate carelessness)
+     example: no tolerance of extra space
+  No style cops/ mostly just canonical form allowed
+     example: no empty lines  -- reasoning: how many empty lines? "tasteful?"
+                                    1 between segments
+                                    2 between methods
+                                    3 between classes
+  simple straightforward rules
+
+
+  <binding> ::= <var> = <expr>
+
+  <expr> ::= <var> |
+             <app-expr>
+
+  <app-expr> ::= <expr> <expr>
+  // <expr> { \n+4 <binding> } |

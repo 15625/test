@@ -3,3 +3,7 @@ empty.root
 empty_line.root
 wrong_indent_0.root
 first_program.root
+bin_op.root
+bin_op_e1.root
+bin_op_e2.root
+bin_op_e3.root

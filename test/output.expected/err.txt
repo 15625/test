@@ -9,3 +9,10 @@ ParseException: line 1: variable name is empty
 [wrong_indent_0.root] 
 ParseException: line 1: indent 2 (expected 0)
 [first_program.root] 
+[bin_op.root] 
+[bin_op_e1.root] 
+EvalException: cannot apply: + 6.0
+[bin_op_e2.root] 
+EvalException: wrong arg type: 1.0 1.0
+[bin_op_e3.root] 
+EvalException: wrong arg type: 4.0 + +

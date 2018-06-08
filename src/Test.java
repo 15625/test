@@ -126,12 +126,31 @@ public class Test
         throws ParseException
     {
         var i = endOfNextToken(line, i0);
-        var token = line.substring(i0, i);
+        var t1 = line.substring(i0, i);
 
-        if (i != line.length())
+        if (i == line.length())
+            return new VarExpr(t1);
+
+        i0 = i + 1;
+        i = endOfNextToken(line, i0);
+        var t2 = line.substring(i0, i);
+
+        if (i == line.length())
             throw new RuntimeException("NYI...");
 
-        return new VarExpr(token);
+        i0 = i + 1;
+        i = endOfNextToken(line, i0);
+        var t3 = line.substring(i0, i);
+
+        if (i != line.length())
+        {
+            System.err.format("line %d: i0 %d i %d len %d%n", reader.getLineNumber(), i0, i, line.length());
+            throw new RuntimeException("NYI...");
+        }
+
+        return new AppExpr(
+                new AppExpr(new VarExpr(t1), new VarExpr(t2)),
+                new VarExpr(t3));
     }
 
     private static int endOfNextToken(
@@ -192,6 +211,8 @@ class EvalException extends RootException
 
 interface Value
 {
+    Value apply(Value v)
+        throws EvalException;
 }
 
 interface Expr
@@ -215,17 +236,109 @@ interface Env
 
 class DoubleValue implements Value
 {
-    DoubleValue(Double val)
+    DoubleValue(double val)
     {
         m_val = val;
     }
 
     public String toString()
     {
-        return m_val.toString();
+        return String.valueOf(m_val);
     }
 
-    private final Double m_val;
+    public Value apply(Value v)
+        throws EvalException
+    {
+        if (v instanceof BinOpValue)
+        {
+            return new DoubleOpValue(this, (BinOpValue)v);
+        }
+        else
+            throw new EvalException(
+                String.format("wrong arg type: %s %s", toString(), v.toString()));
+    }
+
+    public double val()
+    {
+        return m_val;
+    }
+
+    private final double m_val;
+}
+
+class BinOpValue implements Value
+{
+    public enum Op {
+        Plus
+    };
+
+    BinOpValue(Op op)
+    {
+        m_op = op;
+    }
+
+    public String toString()
+    {
+        switch (m_op)
+        {
+            case Plus:
+            return "+";
+
+            default:
+            throw new RuntimeException("unknown operator (should not happen)");
+        }
+    }
+
+    public Value apply(Value v)
+        throws EvalException
+    {
+        throw new EvalException(
+                String.format("cannot apply: %s %s", toString(), v.toString()));
+    }
+
+    public java.util.function.DoubleBinaryOperator doubleOp()
+    {
+        switch (m_op)
+        {
+            case Plus:
+            return (x, y) -> x + y;
+
+            default:
+            throw new RuntimeException("unknown operator (should not happen)");
+        }
+    }
+
+    private final Op m_op;
+}
+
+class DoubleOpValue implements Value
+{
+    DoubleOpValue(DoubleValue lhs, BinOpValue op)
+    {
+        m_lhs = lhs;
+        m_op = op;
+    }
+
+    public String toString()
+    {
+        return String.format("%s %s", m_lhs, m_op);
+    }
+
+    public Value apply(Value v)
+        throws EvalException
+    {
+        if (v instanceof DoubleValue)
+        {
+            return new DoubleValue(
+                    m_op.doubleOp().applyAsDouble(m_lhs.val(), ((DoubleValue)v).val()));
+        }
+        else
+            throw new EvalException(
+                String.format("wrong arg type: %s %s", toString(), v.toString()));
+    }
+
+    private final DoubleValue m_lhs;
+    private final BinOpValue m_op;
 }
 
 class VarExpr implements Expr
@@ -243,6 +356,26 @@ class VarExpr implements Expr
     }
 
     private final String m_var;
+}
+
+class AppExpr implements Expr
+{
+    public AppExpr(Expr e1, Expr e2)
+    {
+        m_e1 = e1;
+        m_e2 = e2;
+    }
+
+    public Value evaluate(Env env)
+        throws EvalException
+    {
+        var v1 = m_e1.evaluate(env);
+        var v2 = m_e2.evaluate(env);
+        return v1.apply(v2);
+    }
+
+    private final Expr m_e1;
+    private final Expr m_e2;
 }
 
 class ExprClosure implements Closure
@@ -314,6 +447,12 @@ class SystemEnv implements Env
     private Value parseValue(String var)
         throws EvalException
     {
+        switch (var)
+        {
+            case "+":
+            return new BinOpValue(BinOpValue.Op.Plus);
+        }
+
         try
         {
             return new DoubleValue(Double.valueOf(var));

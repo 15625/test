@@ -5,3 +5,8 @@
 [wrong_indent_0.root] 
 [first_program.root] 
 1.0
+[bin_op.root] 
+10.0
+[bin_op_e1.root] 
+[bin_op_e2.root] 
+[bin_op_e3.root] 
