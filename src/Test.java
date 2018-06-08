@@ -16,7 +16,16 @@ public class Test
 
             var env = new RecEnv(bindings, initEnv());
 
-            var root = env.get("root");
+            Closure root;
+            try
+            {
+                root = env.get("root");
+            }
+            catch (RawException ex)
+            {
+                var l = srcReader.getLineNumber();
+                throw new EvalException(new SrcInfo(l, 0, 0), ex.getMessage());
+            }
 
             var result = root.evaluate();
             System.out.println(result);
@@ -133,33 +142,26 @@ public class Test
     {
         var l = reader.getLineNumber();
 
-        var i = endOfNextToken(line, i0);
-        var t1 = line.substring(i0, i);
-        var e1 = new VarExpr(t1, new SrcInfo(l, i0 + 1, i));
+        Expr e = null;
 
-        if (i == line.length())
-            return e1;
-
-        i0 = i + 1;
-        i = endOfNextToken(line, i0);
-        var t2 = line.substring(i0, i);
-        var e2 = new VarExpr(t2, new SrcInfo(l, i0 + 1, i));
-
-        if (i == line.length())
-            throw new RuntimeException("NYI...");
-
-        i0 = i + 1;
-        i = endOfNextToken(line, i0);
-        var t3 = line.substring(i0, i);
-        var e3 = new VarExpr(t3, new SrcInfo(l, i0 + 1, i));
-
-        if (i != line.length())
+        while (i0 < line.length())
         {
-            System.err.format("line %d: i0 %d i %d len %d%n", l, i0, i, line.length());
-            throw new RuntimeException("NYI...");
+            var i = endOfNextToken(line, i0);
+            var t2 = line.substring(i0, i);
+
+            if (t2.isEmpty())
+                throw new ParseException(
+                        new SrcInfo(l, i0 + 1, i + 1),
+                        "expr term is empty");
+
+            var e2 = new VarExpr(t2, new SrcInfo(l, i0 + 1, i));
+
+            e = e == null ? e2 : new AppExpr(e, e2);
+
+            i0 = i + 1;
         }
 
-        return new AppExpr(new AppExpr(e1, e2), e3);
+        return e;
     }
 
     private static int endOfNextToken(
@@ -223,9 +225,9 @@ class EvalException extends RootException
     }
 }
 
-class ApplyException extends Exception
+class RawException extends Exception
 {
-    public ApplyException(String msg)
+    public RawException(String msg)
     {
         super(msg);
     }
@@ -234,7 +236,7 @@ class ApplyException extends Exception
 interface Value
 {
     Value apply(Value v)
-        throws ApplyException;
+        throws RawException;
 }
 
 interface Expr
@@ -255,7 +257,7 @@ interface Closure
 interface Env
 {
     public Closure get(String var)
-        throws EvalException;
+        throws RawException;
 }
 
 class SrcInfo
@@ -285,14 +287,14 @@ class DoubleValue implements Value
     }
 
     public Value apply(Value v)
-        throws ApplyException
+        throws RawException
     {
         if (v instanceof BinOpValue)
         {
             return new DoubleOpValue(this, (BinOpValue)v);
         }
         else
-            throw new ApplyException(
+            throw new RawException(
                 String.format("wrong arg type: %s %s", toString(), v.toString()));
     }
 
@@ -328,9 +330,9 @@ class BinOpValue implements Value
     }
 
     public Value apply(Value v)
-        throws ApplyException
+        throws RawException
     {
-        throw new ApplyException(
+        throw new RawException(
                 String.format("cannot apply: %s %s", toString(), v.toString()));
     }
 
@@ -363,7 +365,7 @@ class DoubleOpValue implements Value
     }
 
     public Value apply(Value v)
-        throws ApplyException
+        throws RawException
     {
         if (v instanceof DoubleValue)
         {
@@ -371,7 +373,7 @@ class DoubleOpValue implements Value
                     m_op.doubleOp().applyAsDouble(m_lhs.val(), ((DoubleValue)v).val()));
         }
         else
-            throw new ApplyException(
+            throw new RawException(
                 String.format("wrong arg type: %s %s", toString(), v.toString()));
     }
 
@@ -405,8 +407,15 @@ class VarExpr extends AbstractExpr
     public Value evaluate(Env env)
         throws EvalException
     {
-        var clo = env.get(m_var);
-        return clo.evaluate();
+        try
+        {
+            var clo = env.get(m_var);
+            return clo.evaluate();
+        }
+        catch (RawException ex)
+        {
+            throw new EvalException(srcInfo(), ex.getMessage());
+        }
     }
 
     public String name()
@@ -435,7 +444,7 @@ class AppExpr extends AbstractExpr
         {
             return v1.apply(v2);
         }
-        catch (ApplyException ex)
+        catch (RawException ex)
         {
             throw new EvalException(srcInfo() , ex.getMessage());
         }
@@ -501,7 +510,7 @@ class RecEnv implements Env
     }
 
     public Closure get(String var)
-        throws EvalException
+        throws RawException
     {
         var clo = m_bindings.get(var);
         if (clo == null)
@@ -516,14 +525,14 @@ class RecEnv implements Env
 class SystemEnv implements Env
 {
     public Closure get(String var)
-        throws EvalException
+        throws RawException
     {
         var val = parseValue(var);
         return new ValueClosure(val);
     }
 
     private Value parseValue(String var)
-        throws EvalException
+        throws RawException
     {
         switch (var)
         {
@@ -539,8 +548,6 @@ class SystemEnv implements Env
         {
         }
 
-        throw new EvalException(
-                new SrcInfo(0, 0, 0),
-                String.format("unbound var: %s", var));
+        throw new RawException(String.format("unbound var: %s", var));
     }
 }
