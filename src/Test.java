@@ -67,7 +67,10 @@ class Parser
 
     public SrcInfo srcLoc()
     {
-        return new SrcInfo(reader.getLineNumber(), i0, i0);
+        var l = reader.getLineNumber();
+        if (l == 0)
+            l = 1;
+        return new SrcInfo(l, i0 + 1, i0 + 1);
     }
 
     public java.util.Map<String, Expr> parseBindings(
@@ -102,19 +105,18 @@ class Parser
             try
             {
                 line = reader.readLine();
+                if (line == null)
+                    return null;
             }
             catch (java.io.IOException ex)
             {
                 throw new ParseException(
-                        new SrcInfo(reader.getLineNumber(), 0, 0),
+                        srcLoc(),
                         "I/O error", ex);
             }
 
             i0 = 0;
         }
-
-        if (line == null)
-            return null;
 
         var l = reader.getLineNumber();
 
@@ -160,7 +162,6 @@ class Parser
         var expr = parseExpr(indent);
 
         line = null;
-        i0 = 0;
 
         return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(var, expr);
     }
@@ -288,6 +289,7 @@ interface Env
 
 class SrcInfo
 {
+    // line/char positions start from 1
     SrcInfo(int line, int charBegin, int charEnd)
     {
         Line = line;

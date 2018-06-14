@@ -3,7 +3,7 @@ Usage: java Test <source_file>
 [not_exist.root] 
 java.io.FileNotFoundException: input\not_exist.root (The system cannot find the file specified)
 [empty.root] 
-EvalException: 0(0-0): unbound var: root
+EvalException: 1(1-1): unbound var: root
 [empty_line.root] 
 ParseException: 1(1-1): variable name is empty
 [wrong_indent_0.root] 
@@ -29,4 +29,4 @@ ParseException: 1(16-16): expr term is empty
 [long_exp_e5.root] 
 EvalException: 4(7-8): unbound var: +z
 [long_exp_e6.root] 
-EvalException: 4(0-0): unbound var: root
+EvalException: 4(15-15): unbound var: root
