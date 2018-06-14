@@ -29,4 +29,20 @@ ParseException: 1(16-16): expr term is empty
 [long_exp_e5.root] 
 EvalException: 4(7-8): unbound var: +z
 [long_exp_e6.root] 
-EvalException: 4(15-15): unbound var: root
+EvalException: 4(14-14): unbound var: root
+[nest_exp.root] 
+[nest_exp_e1.root] 
+ParseException: 2(1-2): indent 2 (expected 0)
+[nest_exp_e2.root] 
+ParseException: 2(1-6): indent 6 (expected 4)
+[nest_exp_e3.root] 
+ParseException: 3(1-3): indent 3 (expected 0)
+[nest_exp_e4.root] 
+ParseException: 3(1-5): indent 5 (expected 4)
+[nest_exp_e5.root] 
+EvalException: 1(16-16): unbound var: y
+[nest_exp_e6.root] 
+EvalException: 4(5-5): unbound var: z
+[nest_exp_e7.root] 
+EvalException: 2(9-9): unbound var: y
+[nest2_exp.root] 

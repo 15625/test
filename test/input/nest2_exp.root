@@ -1,0 +1,5 @@
+root = 1 + x + y + z
+    x = y + 1 + z
+        y = z + z
+    y = z + z + 1
+z = 1 + 1

@@ -100,7 +100,7 @@ class Parser
             int indent)
         throws ParseException
     {
-        if (line == null)
+        if (line == null || i0 == line.length())
         {
             try
             {
@@ -161,8 +161,6 @@ class Parser
         i0 = i;
         var expr = parseExpr(indent);
 
-        line = null;
-
         return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(var, expr);
     }
 
@@ -174,7 +172,7 @@ class Parser
 
         Expr e = null;
 
-        while (i0 <= line.length())
+        for (;;)
         {
             var i = endOfNextToken();
             var t2 = line.substring(i0, i);
@@ -188,10 +186,18 @@ class Parser
 
             e = e == null ? e2 : new AppExpr(e, e2);
 
+            if (i == line.length())
+            {
+                i0 = i;
+                break;
+            }
+
             i0 = i + 1;
         }
 
-        return e;
+        var bindings = parseBindings(indent + 4);
+
+        return bindings.isEmpty() ? e : new LetrecExpr(e, bindings);
     }
 
     private int endOfNextToken()
@@ -491,6 +497,27 @@ class AppExpr extends AbstractExpr
 
     private final Expr m_e1;
     private final Expr m_e2;
+}
+
+class LetrecExpr extends AbstractExpr
+{
+    public LetrecExpr(Expr e, java.util.Map<String, Expr> bindings)
+    {
+        super(e.srcInfo());
+        m_e = e;
+        m_bindings = bindings;
+    }
+
+    public Value evaluate(Env env)
+        throws EvalException
+    {
+        var env1 = new RecEnv(m_bindings, env);
+
+        return m_e.evaluate(env1);
+    }
+
+    private final Expr m_e;
+    private final java.util.Map<String, Expr> m_bindings;
 }
 
 class ExprClosure implements Closure

@@ -32,8 +32,4 @@ Scratch
 
   <binding> ::= <var> = <expr>
 
-  <expr> ::= <var> |
-             <app-expr>
-
-  <app-expr> ::= <expr> <expr>
-  // <expr> { \n+4 <binding> } |
+  <expr> ::= <var> { <var> } { \n+4 <binding> }
