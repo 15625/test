@@ -33,3 +33,12 @@
 15.0
 [simple_func.root] 
 16.0
+[fib.root] 
+144.0
+[fib_e1.root] 
+[fib_e2.root] 
+[fib_e3.root] 
+[fib_e4.root] 
+[fib_e5.root] 
+[fib_e6.root] 
+[fib_e7.root] 

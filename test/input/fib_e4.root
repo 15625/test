@@ -1,0 +1,8 @@
+root = fib 11
+    fib x = 1 if
+            1 if x = 1
+            fib_x_1 + fib_x_2
+        fib_x_1 = fib x_1
+            x_1 = x - 1
+        fib_x_2 = fib x_2
+            x_2 = x - 2

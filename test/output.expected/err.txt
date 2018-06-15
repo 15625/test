@@ -47,3 +47,18 @@ EvalException: 4(5-5): unbound var: z
 EvalException: 2(9-9): unbound var: y
 [nest2_exp.root] 
 [simple_func.root] 
+[fib.root] 
+[fib_e1.root] 
+ParseException: 3(23-23): unexpected end of file
+[fib_e2.root] 
+ParseException: 3(13-15): unexpected if
+[fib_e3.root] 
+ParseException: 2(18-18): expr term is empty
+[fib_e4.root] 
+ParseException: 2(17-17): expr term is empty
+[fib_e5.root] 
+ParseException: 4(1-11): indent 11 (expected 12)
+[fib_e6.root] 
+EvalException: 4(13-25): cannot apply: false 1.0
+[fib_e7.root] 
+EvalException: 3(13-22): condition not boolean: 10.0

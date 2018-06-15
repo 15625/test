@@ -196,10 +196,61 @@ class Parser
             int indent)
         throws ParseException
     {
+        Expr e = parseCondExpr();
+
+        var bindings = parseBindings(indent + 4);
+
+        return bindings.isEmpty() ? e : new LetrecExpr(e, bindings);
+    }
+
+    private Expr parseCondExpr()
+        throws ParseException
+    {
         var l = reader.getLineNumber();
+        var i_start = i0;
 
-        Expr e = null;
+        // true branch
+        Expr et = null;
 
+        boolean no_if = true;
+        while (no_if)
+        {
+            var i = endOfNextToken();
+            var t2 = line.substring(i0, i);
+
+            if (t2.isEmpty())
+                throw new ParseException(
+                        new SrcInfo(l, i0 + 1, i + 1),
+                        "expr term is empty");
+
+            if (t2.equals("if"))
+            {
+                if (et == null)
+                    throw new ParseException(
+                            new SrcInfo(l, i0 + 1, i + 1),
+                            "unexpected if");
+                no_if = false;
+            }
+            else
+            {
+                var e2 = new VarExpr(t2, new SrcInfo(l, i0 + 1, i));
+                et = et == null ? e2 : new AppExpr(et, e2);
+            }
+
+            if (i == line.length())
+            {
+                i0 = i;
+                break;
+            }
+
+            i0 = i + 1;
+        }
+
+        if (no_if)
+            return et;
+
+        // condition
+        Expr ec = null;
         for (;;)
         {
             var i = endOfNextToken();
@@ -211,8 +262,7 @@ class Parser
                         "expr term is empty");
 
             var e2 = new VarExpr(t2, new SrcInfo(l, i0 + 1, i));
-
-            e = e == null ? e2 : new AppExpr(e, e2);
+            ec = ec == null ? e2 : new AppExpr(ec, e2);
 
             if (i == line.length())
             {
@@ -223,9 +273,38 @@ class Parser
             i0 = i + 1;
         }
 
-        var bindings = parseBindings(indent + 4);
+        try
+        {
+            line = reader.readLine();
+            if (line == null)
+                throw new ParseException(
+                        new SrcInfo(l, i0 + 1, i0 + 1),
+                        "unexpected end of file");
+        }
+        catch (java.io.IOException ex)
+        {
+            throw new ParseException(
+                    srcLoc(),
+                    "I/O error", ex);
+        }
 
-        return bindings.isEmpty() ? e : new LetrecExpr(e, bindings);
+        i0 = 0;
+        l = reader.getLineNumber();
+
+        // else indent
+        int i = 0;
+        while (i < line.length() && line.charAt(i) == ' ')
+            i++;
+
+        if (i != i_start)
+            throw new ParseException(
+                    new SrcInfo(l, 1, i),
+                    String.format("indent %d (expected %d)", i, i_start));
+
+        i0 = i;
+        var ef = parseCondExpr();
+
+        return new CondExpr(ec, et, ef);
     }
 
     private int endOfNextToken()
@@ -424,10 +503,39 @@ class DoubleValue implements Value
     private final double m_val;
 }
 
+class BooleanValue implements Value
+{
+    BooleanValue(boolean val)
+    {
+        m_val = val;
+    }
+
+    public String toString()
+    {
+        return String.valueOf(m_val);
+    }
+
+    public Value apply(Value v)
+        throws EvalException
+    {
+        throw new EvalException(
+                String.format("cannot apply: %s %s", toString(), v.toString()));
+    }
+
+    public boolean val()
+    {
+        return m_val;
+    }
+
+    private final boolean m_val;
+}
+
 class BinOpValue implements Value
 {
     public enum Op {
-        Plus
+        Plus,
+        Minus,
+        Equal
     };
 
     BinOpValue(Op op)
@@ -442,6 +550,12 @@ class BinOpValue implements Value
             case Plus:
             return "+";
 
+            case Minus:
+            return "-";
+
+            case Equal:
+            return "=";
+
             default:
             throw new RuntimeException("unknown operator (should not happen)");
         }
@@ -454,16 +568,9 @@ class BinOpValue implements Value
                 String.format("cannot apply: %s %s", toString(), v.toString()));
     }
 
-    public java.util.function.DoubleBinaryOperator doubleOp()
+    public Op op()
     {
-        switch (m_op)
-        {
-            case Plus:
-            return (x, y) -> x + y;
-
-            default:
-            throw new RuntimeException("unknown operator (should not happen)");
-        }
+        return m_op;
     }
 
     private final Op m_op;
@@ -487,8 +594,20 @@ class DoubleOpValue implements Value
     {
         if (v instanceof DoubleValue)
         {
-            return new DoubleValue(
-                    m_op.doubleOp().applyAsDouble(m_lhs.val(), ((DoubleValue)v).val()));
+            switch (m_op.op())
+            {
+                case Plus:
+                return new DoubleValue(m_lhs.val() + ((DoubleValue)v).val());
+
+                case Minus:
+                return new DoubleValue(m_lhs.val() - ((DoubleValue)v).val());
+
+                case Equal:
+                return new BooleanValue(m_lhs.val() == ((DoubleValue)v).val());
+
+                default:
+                throw new RuntimeException("unknown operator (should not happen)");
+            }
         }
         else
             throw new EvalException(
@@ -669,6 +788,36 @@ class LambdaExpr extends AbstractExpr
     private final Expr m_e;
 }
 
+class CondExpr extends AbstractExpr
+{
+    public CondExpr(Expr ec, Expr et, Expr ef)
+    {
+        super(et.srcInfo().composeWith(ec.srcInfo()));
+        m_ec = ec;
+        m_et = et;
+        m_ef = ef;
+    }
+
+    protected Value _evaluate(Env env)
+        throws EvalException
+    {
+        var cond = m_ec.evaluate(env);
+        if (! (cond instanceof BooleanValue))
+            throw new EvalException(
+                    String.format("condition not boolean: %s", cond),
+                    this);
+           
+        if (((BooleanValue)cond).val())
+            return m_et.evaluate(env);
+        else
+            return m_ef.evaluate(env);
+    }
+
+    private final Expr m_ec;
+    private final Expr m_et;
+    private final Expr m_ef;
+}
+
 class ExprClosure implements Closure
 {
     public ExprClosure(Expr expr, Env env)
@@ -765,6 +914,12 @@ class SystemEnv implements Env
         {
             case "+":
             return new BinOpValue(BinOpValue.Op.Plus);
+
+            case "-":
+            return new BinOpValue(BinOpValue.Op.Minus);
+
+            case "=":
+            return new BinOpValue(BinOpValue.Op.Equal);
         }
 
         try

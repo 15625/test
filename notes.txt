@@ -11,7 +11,7 @@ TODO
   parallel eval
 
 Scratch
-  Encourage top-down thinking (structural induction)
+  Enforce top-down thinking (structural induction)
   Mathematical/Algebra thinking
      say no to confusing notation designed by programmers
   learn quickly, but takes time to perfect
@@ -29,7 +29,16 @@ Scratch
                                     3 between classes
   simple straightforward rules
 
+  No parenthese?  No pemdas?
+  No comments.
+  Strict style/spacing.
+  Low sugar.
+
 
   <binding> ::= <var> { <var> } = <expr>
 
-  <expr> ::= <var> { <var> } { \n+4 <binding> }
+  <expr> ::= <cond-expr> { \n+4 <binding> }
+
+  <cond-expr> ::= { <simple-expr> if <simple-expr> \n+align } <simple-expr>
+
+  <simple-expr> ::= <var> { <var> }
