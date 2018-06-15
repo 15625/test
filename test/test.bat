@@ -8,7 +8,7 @@ set OUTPUT=output
 set OUTPUT_EXPECTED=output.expected
 set LIST=list
 
-rmdir /s %OUTPUT%
+rmdir /s /q %OUTPUT%
 if EXIST %OUTPUT% (
     echo %OUTPUT% folder still exists.
     goto :eof

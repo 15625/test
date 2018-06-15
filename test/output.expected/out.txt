@@ -31,3 +31,5 @@
 [nest_exp_e7.root] 
 [nest2_exp.root] 
 15.0
+[simple_func.root] 
+16.0

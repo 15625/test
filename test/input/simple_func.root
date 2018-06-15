@@ -1,0 +1,8 @@
+root = sum x1 y z
+    sum x y z = add xy z
+        xy = add x y
+    add x y = x + y
+    x1 = add 1 x
+    x = sum y 1 z
+    z = add 1 1
+    y = sum z z 1

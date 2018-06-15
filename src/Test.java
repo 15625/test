@@ -21,9 +21,11 @@ public class Test
             {
                 root = env.get("root");
             }
-            catch (RawException ex)
+            catch (EnvException ex)
             {
-                throw new EvalException(parser.srcLoc(), ex.getMessage());
+                throw new EvalException(
+                        ex.getMessage(),
+                        new VarExpr("root", parser.srcLoc()));
             }
 
             var result = root.evaluate();
@@ -136,32 +138,58 @@ class Parser
                     new SrcInfo(l, 1, i),
                     String.format("indent %d (expected %d)", i, indent));
 
-        // variable
+        // variables
         i0 = i;
-        i = endOfNextToken();
-        var varName = line.substring(i0, i);
 
-        if (varName.isEmpty())
+        var vars = new java.util.ArrayList<VarExpr>();
+        for (;;)
+        {
+            i = endOfNextToken();
+            var varName = line.substring(i0, i);
+
+            if (varName.isEmpty())
+                throw new ParseException(
+                        new SrcInfo(l, i0 + 1, i + 1),
+                        "variable name is empty");
+
+            if (i == line.length())
+            {
+                i0 = i;
+                throw new ParseException(
+                        new SrcInfo(l, i0 + 1, i0 + 1),
+                        "unexpected end of line");
+            }
+
+            if (!varName.equals("="))
+                vars.add(new VarExpr(varName, new SrcInfo(l, i0 + 1, i)));
+
+            i0 = i + 1;
+
+            if (varName.equals("="))
+                break;
+        }
+
+        if (vars.isEmpty())
             throw new ParseException(
-                    new SrcInfo(l, i0 + 1, i + 1),
-                    "variable name is empty");
-
-        var var = new VarExpr(varName, new SrcInfo(l, i0 + 1, i));
-
-        // =
-        i0 = i;
-        i = Math.min(line.length(), i0 + 3);
-        var eq = line.substring(i0, i);
-        if (!eq.equals(" = "))
-            throw new ParseException(
-                    new SrcInfo(l, i0 + 1, i),
-                    String.format("bad equal sign: '%s' (expected ' = ')", eq));
+                    new SrcInfo(l, i0 + 1, i0 + 1),
+                    "missing variables");
 
         // expr
-        i0 = i;
         var expr = parseExpr(indent);
 
-        return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(var, expr);
+        if (vars.size() == 1)
+            return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(
+                    vars.get(0),
+                    expr);
+        else
+        {
+            var lambda = expr;
+            for (int j = vars.size() - 1; j > 0; j--)
+                lambda = new LambdaExpr(vars.get(j), lambda);
+            return new java.util.AbstractMap.SimpleEntry<VarExpr, Expr>(
+                    vars.get(0),
+                    lambda);
+        }
     }
 
     private Expr parseExpr(
@@ -213,21 +241,26 @@ class Parser
     int i0;
 }
 
-class RootException extends Exception
+abstract class RootException extends Exception
 {
-    public RootException(SrcInfo srcInfo, String msg)
+    public RootException(String msg)
     {
-        super(compMsg(srcInfo, msg));
+        super(msg);
     }
 
-    public RootException(SrcInfo srcInfo, String msg, Throwable cause)
+    public RootException(String msg, Throwable cause)
     {
-        super(compMsg(srcInfo, msg), cause);
+        super(msg, cause);
     }
 
-    private static String compMsg(SrcInfo srcInfo, String msg)
+    public abstract SrcInfo srcInfo();
+
+    public String toString()
     {
-        return String.format("%d(%d-%d): %s", srcInfo.Line, srcInfo.CharBegin, srcInfo.CharEnd, msg);
+        return String.format("%s: %s: %s",
+                getClass().getName(),
+                srcInfo(),
+                getMessage());
     }
 }
 
@@ -235,32 +268,61 @@ class ParseException extends RootException
 {
     public ParseException(SrcInfo srcInfo, String msg)
     {
-        super(srcInfo, msg);
+        super(msg);
+        m_srcInfo = srcInfo;
     }
 
     public ParseException(SrcInfo srcInfo, String msg, Throwable cause)
     {
-        super(srcInfo, msg, cause);
+        super(msg, cause);
+        m_srcInfo = srcInfo;
     }
+
+    public SrcInfo srcInfo()
+    {
+        return m_srcInfo;
+    }
+
+    private final SrcInfo m_srcInfo;
 }
 
 class EvalException extends RootException
 {
-    // TODO: more context
-    public EvalException(SrcInfo srcInfo, String msg)
+    public EvalException(String msg)
     {
-        super(srcInfo, msg);
+        super(msg);
     }
 
+    public EvalException(String msg, Expr e)
+    {
+        super(msg);
+        appendExprStack(e);
+    }
+
+    /*
     public EvalException(SrcInfo srcInfo, String msg, Throwable cause)
     {
         super(srcInfo, msg, cause);
     }
+    */
+
+    public SrcInfo srcInfo()
+    {
+        return m_expr_stack.get(0).srcInfo();
+    }
+
+    public void appendExprStack(Expr e)
+    {
+        m_expr_stack.add(e);
+    }
+
+    private final java.util.List<Expr> m_expr_stack =
+        new java.util.ArrayList<Expr>();
 }
 
-class RawException extends Exception
+class EnvException extends Exception
 {
-    public RawException(String msg)
+    public EnvException(String msg)
     {
         super(msg);
     }
@@ -269,7 +331,7 @@ class RawException extends Exception
 interface Value
 {
     Value apply(Value v)
-        throws RawException;
+        throws EvalException;
 }
 
 interface Expr
@@ -290,7 +352,7 @@ interface Closure
 interface Env
 {
     public Closure get(String var)
-        throws RawException;
+        throws EnvException;
 }
 
 class SrcInfo
@@ -298,14 +360,36 @@ class SrcInfo
     // line/char positions start from 1
     SrcInfo(int line, int charBegin, int charEnd)
     {
-        Line = line;
-        CharBegin = charBegin;
-        CharEnd = charEnd;
+        m_line = line;
+        m_charBegin = charBegin;
+        m_charEnd = charEnd;
     }
 
-    public final int Line;
-    public final int CharBegin;
-    public final int CharEnd;
+    public SrcInfo composeWith(SrcInfo that)
+    {
+        if (this.m_line != that.m_line)
+            throw new RuntimeException(
+                    String.format("line numbers mismatch: %d vs. %d",
+                        this.m_line,
+                        that.m_line));
+
+        if (this.m_charEnd >= that.m_charBegin)
+            throw new RuntimeException(
+                    String.format("overlap: %d vs. %d",
+                        this.m_charEnd,
+                        that.m_charBegin));
+
+        return new SrcInfo(this.m_line, this.m_charBegin, that.m_charEnd);
+    }
+
+    public String toString()
+    {
+        return String.format("%d(%d-%d)", m_line, m_charBegin, m_charEnd);
+    }
+
+    private final int m_line;
+    private final int m_charBegin;
+    private final int m_charEnd;
 }
 
 class DoubleValue implements Value
@@ -321,14 +405,14 @@ class DoubleValue implements Value
     }
 
     public Value apply(Value v)
-        throws RawException
+        throws EvalException
     {
         if (v instanceof BinOpValue)
         {
             return new DoubleOpValue(this, (BinOpValue)v);
         }
         else
-            throw new RawException(
+            throw new EvalException(
                 String.format("wrong arg type: %s %s", toString(), v.toString()));
     }
 
@@ -364,9 +448,9 @@ class BinOpValue implements Value
     }
 
     public Value apply(Value v)
-        throws RawException
+        throws EvalException
     {
-        throw new RawException(
+        throw new EvalException(
                 String.format("cannot apply: %s %s", toString(), v.toString()));
     }
 
@@ -399,7 +483,7 @@ class DoubleOpValue implements Value
     }
 
     public Value apply(Value v)
-        throws RawException
+        throws EvalException
     {
         if (v instanceof DoubleValue)
         {
@@ -407,12 +491,38 @@ class DoubleOpValue implements Value
                     m_op.doubleOp().applyAsDouble(m_lhs.val(), ((DoubleValue)v).val()));
         }
         else
-            throw new RawException(
+            throw new EvalException(
                 String.format("wrong arg type: %s %s", toString(), v.toString()));
     }
 
     private final DoubleValue m_lhs;
     private final BinOpValue m_op;
+}
+
+class LambdaValue implements Value
+{
+    LambdaValue(VarExpr var, Expr e, Env env)
+    {
+        m_var = var;
+        m_e = e;
+        m_env = env;
+    }
+
+    public String toString()
+    {
+        return String.format("\\%s.<...>", m_var.name());
+    }
+
+    public Value apply(Value val)
+        throws EvalException
+    {
+        var env1 = new ValueEnv(m_var.name(), val, m_env);
+        return m_e.evaluate(env1);
+    }
+
+    private final VarExpr m_var;
+    private final Expr m_e;
+    private final Env m_env;
 }
 
 abstract class AbstractExpr implements Expr
@@ -427,6 +537,31 @@ abstract class AbstractExpr implements Expr
         return m_srcInfo;
     }
 
+    // TODO: trace nicely
+    // private static int trace_level = 0;
+    public final Value evaluate(Env env)
+        throws EvalException
+    {
+        // TODO: trace nicely
+        // for (int i = 0; i < trace_level; i++)
+        //     System.err.print(" ");
+        // System.err.format("%s%n", srcInfo());
+        // trace_level += 4;
+
+        var val = _evaluate(env);
+
+        // TODO: trace nicely
+        // trace_level -= 4;
+        // for (int i = 0; i < trace_level; i++)
+        //     System.err.print(" ");
+        // System.err.format("=> %s%n", val);
+
+        return val;
+    }
+
+    abstract protected Value _evaluate(Env env)
+        throws EvalException;
+
     private final SrcInfo m_srcInfo;
 }
 
@@ -438,7 +573,7 @@ class VarExpr extends AbstractExpr
         m_var = var;
     }
 
-    public Value evaluate(Env env)
+    protected Value _evaluate(Env env)
         throws EvalException
     {
         try
@@ -446,9 +581,14 @@ class VarExpr extends AbstractExpr
             var clo = env.get(m_var);
             return clo.evaluate();
         }
-        catch (RawException ex)
+        catch (EnvException ex)
         {
-            throw new EvalException(srcInfo(), ex.getMessage());
+            throw new EvalException(ex.getMessage(), this);
+        }
+        catch (EvalException ex)
+        {
+            ex.appendExprStack(this);
+            throw ex;
         }
     }
 
@@ -464,12 +604,12 @@ class AppExpr extends AbstractExpr
 {
     public AppExpr(Expr e1, Expr e2)
     {
-        super(composeSrcInfo(e1.srcInfo(), e2.srcInfo()));
+        super(e1.srcInfo().composeWith(e2.srcInfo()));
         m_e1 = e1;
         m_e2 = e2;
     }
 
-    public Value evaluate(Env env)
+    protected Value _evaluate(Env env)
         throws EvalException
     {
         var v1 = m_e1.evaluate(env);
@@ -478,21 +618,11 @@ class AppExpr extends AbstractExpr
         {
             return v1.apply(v2);
         }
-        catch (RawException ex)
+        catch (EvalException ex)
         {
-            throw new EvalException(srcInfo() , ex.getMessage());
+            ex.appendExprStack(this);
+            throw ex;
         }
-    }
-
-    private static SrcInfo composeSrcInfo(SrcInfo d1, SrcInfo d2)
-    {
-        if (d1.Line != d2.Line)
-            throw new RuntimeException(
-                    String.format("line numbers mismatch: %d vs. %d",
-                        d1.Line,
-                        d2.Line));
-
-        return new SrcInfo(d1.Line, d1.CharBegin, d2.CharEnd);
     }
 
     private final Expr m_e1;
@@ -508,7 +638,7 @@ class LetrecExpr extends AbstractExpr
         m_bindings = bindings;
     }
 
-    public Value evaluate(Env env)
+    protected Value _evaluate(Env env)
         throws EvalException
     {
         var env1 = new RecEnv(m_bindings, env);
@@ -518,6 +648,25 @@ class LetrecExpr extends AbstractExpr
 
     private final Expr m_e;
     private final java.util.Map<String, Expr> m_bindings;
+}
+
+class LambdaExpr extends AbstractExpr
+{
+    public LambdaExpr(VarExpr var, Expr e)
+    {
+        super(var.srcInfo().composeWith(e.srcInfo()));
+        m_var = var;
+        m_e = e;
+    }
+
+    protected Value _evaluate(Env env)
+        throws EvalException
+    {
+        return new LambdaValue(m_var, m_e, env);
+    }
+
+    private final VarExpr m_var;
+    private final Expr m_e;
 }
 
 class ExprClosure implements Closure
@@ -554,6 +703,29 @@ class ValueClosure implements Closure
     private final Value m_val;
 }
 
+class ValueEnv implements Env
+{
+    public ValueEnv(String v, Value val, Env outer)
+    {
+        m_v = v;
+        m_val = val;
+        m_outer = outer;
+    }
+
+    public Closure get(String var)
+        throws EnvException
+    {
+        if (var.equals(m_v))
+            return new ValueClosure(m_val);
+
+        return m_outer.get(var);
+    }
+
+    private final String m_v;
+    private final Value m_val;
+    private final Env m_outer;
+}
+
 class RecEnv implements Env
 {
     public RecEnv(java.util.Map<String, Expr> bindings, Env outer)
@@ -565,7 +737,7 @@ class RecEnv implements Env
     }
 
     public Closure get(String var)
-        throws RawException
+        throws EnvException
     {
         var clo = m_bindings.get(var);
         if (clo == null)
@@ -580,14 +752,14 @@ class RecEnv implements Env
 class SystemEnv implements Env
 {
     public Closure get(String var)
-        throws RawException
+        throws EnvException
     {
         var val = parseValue(var);
         return new ValueClosure(val);
     }
 
     private Value parseValue(String var)
-        throws RawException
+        throws EnvException
     {
         switch (var)
         {
@@ -603,6 +775,6 @@ class SystemEnv implements Env
         {
         }
 
-        throw new RawException(String.format("unbound var: %s", var));
+        throw new EnvException(String.format("unbound var: %s", var));
     }
 }

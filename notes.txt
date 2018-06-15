@@ -30,6 +30,6 @@ Scratch
   simple straightforward rules
 
 
-  <binding> ::= <var> = <expr>
+  <binding> ::= <var> { <var> } = <expr>
 
   <expr> ::= <var> { <var> } { \n+4 <binding> }

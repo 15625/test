@@ -46,3 +46,4 @@ EvalException: 4(5-5): unbound var: z
 [nest_exp_e7.root] 
 EvalException: 2(9-9): unbound var: y
 [nest2_exp.root] 
+[simple_func.root] 
