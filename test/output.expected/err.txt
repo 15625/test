@@ -13,7 +13,7 @@ ParseException: 1(1-2): indent 2 (expected 0)
 [bin_op_e1.root] 
 EvalException: 1(8-10): cannot apply: + 6.0
 [bin_op_e2.root] 
-EvalException: 3(5-7): wrong arg type: 1.0 1.0
+EvalException: 3(5-7): cannot apply: 1.0 1.0
 [bin_op_e3.root] 
 EvalException: 2(5-9): wrong arg type: 4.0 + +
 [part_bin_op.root] 

@@ -409,6 +409,7 @@ class EnvException extends Exception
 
 interface Value
 {
+    boolean left();
     Value apply(Value v)
         throws EvalException;
 }
@@ -483,16 +484,13 @@ class DoubleValue implements Value
         return String.valueOf(m_val);
     }
 
+    public boolean left() { return false; }
+
     public Value apply(Value v)
         throws EvalException
     {
-        if (v instanceof BinOpValue)
-        {
-            return new DoubleOpValue(this, (BinOpValue)v);
-        }
-        else
-            throw new EvalException(
-                String.format("wrong arg type: %s %s", toString(), v.toString()));
+        throw new EvalException(
+                String.format("cannot apply: %s %s", toString(), v.toString()));
     }
 
     public double val()
@@ -514,6 +512,8 @@ class BooleanValue implements Value
     {
         return String.valueOf(m_val);
     }
+
+    public boolean left() { return false; }
 
     public Value apply(Value v)
         throws EvalException
@@ -561,11 +561,18 @@ class BinOpValue implements Value
         }
     }
 
+    public boolean left() { return true; }
+
     public Value apply(Value v)
         throws EvalException
     {
-        throw new EvalException(
-                String.format("cannot apply: %s %s", toString(), v.toString()));
+        if (v instanceof DoubleValue)
+        {
+            return new DoubleOpValue((DoubleValue)v, this);
+        }
+        else
+            throw new EvalException(
+                String.format("wrong arg type: %s %s", v.toString(), toString()));
     }
 
     public Op op()
@@ -588,6 +595,8 @@ class DoubleOpValue implements Value
     {
         return String.format("%s %s", m_lhs, m_op);
     }
+
+    public boolean left() { return false; }
 
     public Value apply(Value v)
         throws EvalException
@@ -631,6 +640,8 @@ class LambdaValue implements Value
     {
         return String.format("\\%s.<...>", m_var.name());
     }
+
+    public boolean left() { return false; }
 
     public Value apply(Value val)
         throws EvalException
@@ -735,7 +746,13 @@ class AppExpr extends AbstractExpr
         var v2 = m_e2.evaluate(env);
         try
         {
-            return v1.apply(v2);
+            if (v2.left())
+                return v2.apply(v1);
+            else if (!v1.left())
+                return v1.apply(v2);
+            else
+                throw new EvalException(
+                    String.format("cannot apply: %s %s", v1, v2));
         }
         catch (EvalException ex)
         {
