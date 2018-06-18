@@ -62,3 +62,5 @@ ParseException: 4(1-11): indent 11 (expected 12)
 EvalException: 4(13-25): cannot apply: false 1.0
 [fib_e7.root] 
 EvalException: 3(13-22): condition not boolean: 10.0
+[ops.root] 
+[factorial.root] 

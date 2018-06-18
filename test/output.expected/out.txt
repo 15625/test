@@ -42,3 +42,7 @@
 [fib_e5.root] 
 [fib_e6.root] 
 [fib_e7.root] 
+[ops.root] 
+9.5
+[factorial.root] 
+720.0

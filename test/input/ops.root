@@ -1,0 +1,6 @@
+root = A * B + C - D
+    A = f +
+    B = f -
+    C = f *
+    D = f /
+    f o = 3 o 2

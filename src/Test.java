@@ -484,13 +484,13 @@ class DoubleValue implements Value
         return String.valueOf(m_val);
     }
 
-    public boolean left() { return false; }
+    public boolean left() { return true; }
 
     public Value apply(Value v)
         throws EvalException
     {
         throw new EvalException(
-                String.format("cannot apply: %s %s", toString(), v.toString()));
+                String.format("cannot apply: %s %s", v.toString(), toString()));
     }
 
     public double val()
@@ -535,6 +535,8 @@ class BinOpValue implements Value
     public enum Op {
         Plus,
         Minus,
+        Mul,
+        Div,
         Equal
     };
 
@@ -552,6 +554,12 @@ class BinOpValue implements Value
 
             case Minus:
             return "-";
+
+            case Mul:
+            return "*";
+
+            case Div:
+            return "/";
 
             case Equal:
             return "=";
@@ -610,6 +618,12 @@ class DoubleOpValue implements Value
 
                 case Minus:
                 return new DoubleValue(m_lhs.val() - ((DoubleValue)v).val());
+
+                case Mul:
+                return new DoubleValue(m_lhs.val() * ((DoubleValue)v).val());
+
+                case Div:
+                return new DoubleValue(m_lhs.val() / ((DoubleValue)v).val());
 
                 case Equal:
                 return new BooleanValue(m_lhs.val() == ((DoubleValue)v).val());
@@ -746,10 +760,10 @@ class AppExpr extends AbstractExpr
         var v2 = m_e2.evaluate(env);
         try
         {
-            if (v2.left())
-                return v2.apply(v1);
-            else if (!v1.left())
+            if (!v1.left())
                 return v1.apply(v2);
+            else if (v2.left())
+                return v2.apply(v1);
             else
                 throw new EvalException(
                     String.format("cannot apply: %s %s", v1, v2));
@@ -934,6 +948,12 @@ class SystemEnv implements Env
 
             case "-":
             return new BinOpValue(BinOpValue.Op.Minus);
+
+            case "*":
+            return new BinOpValue(BinOpValue.Op.Mul);
+
+            case "/":
+            return new BinOpValue(BinOpValue.Op.Div);
 
             case "=":
             return new BinOpValue(BinOpValue.Op.Equal);
