@@ -14,21 +14,11 @@ public class Test
             var indent = 0;
             var bindings = parser.parseBindings(indent);
 
-            var env = new RecEnv(bindings, initEnv());
+            var root = new LetrecExpr(
+                    new VarExpr("root", parser.srcLoc()),
+                    bindings);
 
-            Closure root;
-            try
-            {
-                root = env.get("root");
-            }
-            catch (EnvException ex)
-            {
-                throw new EvalException(
-                        ex.getMessage(),
-                        new VarExpr("root", parser.srcLoc()));
-            }
-
-            var result = root.evaluate();
+            var result = root.evaluate(initEnv());
             System.out.println(result);
         }
         catch (RootException ex)
